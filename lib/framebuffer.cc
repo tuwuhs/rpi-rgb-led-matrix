@@ -67,8 +67,8 @@ static void sleep_nanos(long nanos) {
 RGBMatrix::Framebuffer::Framebuffer(int rows, int columns)
   : rows_(rows), columns_(columns),
     pwm_bits_(kBitPlanes), do_luminance_correct_(true),
-    double_rows_(rows / 2), row_mask_(double_rows_ - 1) {
-  bitplane_buffer_ = new IoBits [double_rows_ * columns_ * kBitPlanes];
+    quad_rows_(rows / 4), row_mask_(quad_rows_ - 1) {
+  bitplane_buffer_ = new IoBits [quad_rows_ * 2*columns_ * kBitPlanes];
   Clear();
 }
 
@@ -99,10 +99,11 @@ bool RGBMatrix::Framebuffer::SetPWMBits(uint8_t value) {
 }
 
 inline RGBMatrix::Framebuffer::IoBits *
-RGBMatrix::Framebuffer::ValueAt(int double_row, int column, int bit) {
-  return &bitplane_buffer_[ double_row * (columns_ * kBitPlanes)
-                            + bit * columns_
-                            + column ];
+RGBMatrix::Framebuffer::ValueAt(int quad_row, int column, int bit) {
+  int index = quad_row * (2*columns_ * kBitPlanes)
+                 + bit * 2*columns_
+                 + column;
+  return &bitplane_buffer_[ index ];
 }
 
 // Do CIE1931 luminance correction and scale to output bitplanes
@@ -143,7 +144,7 @@ void RGBMatrix::Framebuffer::Clear() {
   Fill(0, 0, 0);
 #else
   memset(bitplane_buffer_, 0,
-         sizeof(*bitplane_buffer_) * double_rows_ * columns_ * kBitPlanes);
+         sizeof(*bitplane_buffer_) * quad_rows_ * 2*columns_ * kBitPlanes);
 #endif
 }
 
@@ -159,9 +160,9 @@ void RGBMatrix::Framebuffer::Fill(uint8_t r, uint8_t g, uint8_t b) {
     plane_bits.bits.r1 = plane_bits.bits.r2 = (red & mask) == mask;
     plane_bits.bits.g1 = plane_bits.bits.g2 = (green & mask) == mask;
     plane_bits.bits.b1 = plane_bits.bits.b2 = (blue & mask) == mask;
-    for (int row = 0; row < double_rows_; ++row) {
+    for (int row = 0; row < quad_rows_; ++row) {
       IoBits *row_data = ValueAt(row, 0, b);
-      for (int col = 0; col < columns_; ++col) {
+      for (int col = 0; col < (2*columns_); ++col) {
         (row_data++)->raw = plane_bits.raw;
       }
     }
@@ -177,22 +178,30 @@ void RGBMatrix::Framebuffer::SetPixel(int x, int y,
   const uint16_t blue  = MapColor(b);
 
   const int min_bit_plane = kBitPlanes - pwm_bits_;
-  IoBits *bits = ValueAt(y & row_mask_, x, min_bit_plane);
-  if (y < double_rows_) {   // Upper sub-panel.
+  const int column_grouping = 8;
+  int column;
+  // Check y, odd = upper 8 pixels, even = lower 8 pixels
+  if ((y / quad_rows_) & 1) {
+	column = 2*column_grouping * (x/column_grouping) + (x%column_grouping) + column_grouping;
+  } else {
+	column = 2*column_grouping * (x/column_grouping) + (x%column_grouping);
+  }
+  IoBits *bits = ValueAt(y & row_mask_, column, min_bit_plane);
+  if (y < (2*quad_rows_)) {   // Upper sub-panel.
     for (int b = min_bit_plane; b < kBitPlanes; ++b) {
       const uint16_t mask = 1 << b;
       bits->bits.r1 = (red & mask) == mask;
       bits->bits.g1 = (green & mask) == mask;
       bits->bits.b1 = (blue & mask) == mask;
-      bits += columns_;
+      bits += 2*columns_;
     }
   } else {
     for (int b = min_bit_plane; b < kBitPlanes; ++b) {
-      const uint16_t mask = 1 << b;
+	  const uint16_t mask = 1 << b;
       bits->bits.r2 = (red & mask) == mask;
       bits->bits.g2 = (green & mask) == mask;
       bits->bits.b2 = (blue & mask) == mask;
-      bits += columns_;
+      bits += 2*columns_;
     }
   }
 }
@@ -213,7 +222,7 @@ void RGBMatrix::Framebuffer::DumpToMatrix(GPIO *io) {
   strobe.bits.strobe = 1;
 
   const int pwm_to_show = pwm_bits_;  // Local copy, might change in process.
-  for (uint8_t d_row = 0; d_row < double_rows_; ++d_row) {
+  for (uint8_t d_row = 0; d_row < quad_rows_; ++d_row) {
     row_address.bits.row = d_row;
     io->WriteMaskedBits(row_address.raw, row_mask.raw);  // Set row address
 
@@ -223,7 +232,7 @@ void RGBMatrix::Framebuffer::DumpToMatrix(GPIO *io) {
       IoBits *row_data = ValueAt(d_row, 0, b);
       // We clock these in while we are dark. This actually increases the
       // dark time, but we ignore that a bit.
-      for (int col = 0; col < columns_; ++col) {
+      for (int col = 0; col < (2*columns_); ++col) {
         const IoBits &out = *row_data++;
         io->WriteMaskedBits(out.raw, color_clk_mask.raw);  // col + reset clock
         io->SetBits(clock.raw);               // Rising edge: clock color in.

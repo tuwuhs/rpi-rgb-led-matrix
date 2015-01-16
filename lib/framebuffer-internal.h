@@ -60,7 +60,7 @@ private:
   uint8_t pwm_bits_;   // PWM bits to display.
   bool do_luminance_correct_;
 
-  const int double_rows_;
+  const int quad_rows_;
   const uint8_t row_mask_;
 
   union IoBits {
@@ -94,7 +94,7 @@ private:
   // Of course, that means that we store unrelated bits in the frame-buffer,
   // but it allows easy access in the critical section.
   IoBits *bitplane_buffer_;
-  inline IoBits *ValueAt(int double_row, int column, int bit);
+  inline IoBits *ValueAt(int quad_row, int column, int bit);
 };
 }  // namespace rgb_matrix
 #endif // RPI_RGBMATRIX_FRAMEBUFFER_INTERNAL_H
