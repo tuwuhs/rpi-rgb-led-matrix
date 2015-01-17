@@ -50,7 +50,7 @@ public:
     if (f == NULL) return false;
     char header_buf[256];
     const char *line = ReadLine(f, header_buf, sizeof(header_buf));
-#define EXIT_WITH_MSG(m) { fprintf(stderr, "%s: %s |%s", filename, m, line); \
+#define EXIT_WITH_MSG(m) { fprintf(stderr, "%s: %s |%s\n", filename, m, line); \
       fclose(f); return false; }
     if (sscanf(line, "P6 ") == EOF)
       EXIT_WITH_MSG("Can only handle P6 as PPM type.");
@@ -290,7 +290,7 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "Cannot obtain an inotify instance");
     return 1;
   }
-  wd = inotify_add_watch(ifd, ".", IN_MODIFY | IN_CREATE | IN_DELETE);
+  wd = inotify_add_watch(ifd, ".", IN_CLOSE_WRITE);
   if (wd < 0) {
     fprintf(stderr, "Cannot add inotify watch");
     return 1;
@@ -331,10 +331,9 @@ int main(int argc, char *argv[]) {
           struct inotify_event* ev;
           ev = (struct inotify_event*) &buf[i];
           if (ev->len) {
-            printf("File %s %s\n", ev->name,
-                (ev->mask & IN_CREATE)? "created":
-                (ev->mask & IN_DELETE)? "deleted": "modified");
+            printf("File %s changed.\n", ev->name);
             if (strcmp(ev->name, image_filename) == 0) {
+              // usleep(1000000);
               scroller->LoadPPM(image_filename);
             }
           } else {
