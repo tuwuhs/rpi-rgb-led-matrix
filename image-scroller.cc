@@ -184,7 +184,7 @@ int main(int argc, char *argv[]) {
   int rows = 16;
   int chain = 4;
   int scroll_ms = 30;
-  int pwm_bits = 8;
+  int pwm_bits = 4;
   bool do_luminance_correct = true;
 
   const char *image_filename = "runtext16.ppm";
