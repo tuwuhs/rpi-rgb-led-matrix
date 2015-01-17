@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <termios.h>
 
 #include <algorithm>
 
@@ -267,6 +268,19 @@ int main(int argc, char *argv[]) {
   // Image generating demo is crated. Now start the thread.
   image_gen->Start();
 
+  // Setup termios for non-blocking input
+  struct termios initial_settings, new_settings;
+  tcgetattr(0,&initial_settings);
+ 
+  new_settings = initial_settings;
+  new_settings.c_lflag &= ~ICANON;
+  new_settings.c_lflag &= ~ECHO;
+  new_settings.c_lflag &= ~ISIG;
+  new_settings.c_cc[VMIN] = 0;
+  new_settings.c_cc[VTIME] = 0;
+ 
+  tcsetattr(0, TCSANOW, &new_settings);
+  
   // Now, the image genreation runs in the background. We can do arbitrary
   // things here in parallel. In this demo, we're essentially just
   // waiting for one of the conditions to exit.
@@ -275,12 +289,19 @@ int main(int argc, char *argv[]) {
   } else {
     // Things are set up. Just wait for <RETURN> to be pressed.
     printf("Press <RETURN> to exit and reset LEDs\n");
-    getchar();
+    while (1) {
+      int key = getchar();
+      if (key != EOF) {
+        break;
+      }
+    }
   }
 
   // Stop image generating thread.
   delete image_gen;
   delete canvas;
+
+  tcsetattr(0, TCSANOW, &initial_settings);
 
   return 0;
 }
