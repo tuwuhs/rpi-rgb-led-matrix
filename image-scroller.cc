@@ -160,34 +160,18 @@ private:
 };
 
 static int usage(const char *progname) {
-  fprintf(stderr, "usage: %s <options> -D <demo-nr> [optional parameter]\n",
+  fprintf(stderr, "usage: %s <options> [optional parameter]\n",
           progname);
   fprintf(stderr, "Options:\n"
           "\t-r <rows>     : Display rows. 16 for 16x32, 32 for 32x32. "
-          "Default: 32\n"
-          "\t-c <chained>  : Daisy-chained boards. Default: 1.\n"
-          "\t-L            : 'Large' display, composed out of 4 times 32x32\n"
-          "\t-p <pwm-bits> : Bits used for PWM. Something between 1..11\n"
+          "Default: 16\n"
+          "\t-c <chained>  : Daisy-chained boards. Default: 4.\n"
+          "\t-p <pwm-bits> : Bits used for PWM. Something between 1..11. Default: 8\n"
           "\t-l            : Don't do luminance correction (CIE1931)\n"
-          "\t-D <demo-nr>  : Always needs to be set\n"
           "\t-d            : run as daemon. Use this when starting in\n"
           "\t                /etc/init.d, but also when running without\n"
-          "\t                terminal (e.g. cron).\n"
-          "\t-t <seconds>  : Run for these number of seconds, then exit.\n"
-          "\t       (if neither -d nor -t are supplied, waits for <RETURN>)\n");
-  fprintf(stderr, "Demos, choosen with -D\n");
-  fprintf(stderr, "\t0  - some rotating square\n"
-          "\t1  - forward scrolling an image (-m <scroll-ms>)\n"
-          "\t2  - backward scrolling an image (-m <scroll-ms>)\n"
-          "\t3  - test image: a square\n"
-          "\t4  - Pulsing color\n"
-          "\t5  - Grayscale Block\n"
-          "\t6  - Abelian sandpile model (-m <time-step-ms>)\n"
-          "\t7  - Conway's game of life (-m <time-step-ms>)\n"
-          "\t8  - Langton's ant (-m <time-step-ms>)\n"
-          "\t9  - Volume bars (-m <time-step-ms>)\n");
-  fprintf(stderr, "Example:\n\t%s -t 10 -D 1 runtext.ppm\n"
-          "Scrolls the runtext for 10 seconds\n", progname);
+          "\t                terminal (e.g. cron).\n");
+  fprintf(stderr, "Example:\n\t%s runtext.ppm\n", progname);
   return 1;
 }
 
@@ -202,7 +186,7 @@ int main(int argc, char *argv[]) {
   const char *image_filename = "runtext16.ppm";
 
   int opt;
-  while ((opt = getopt(argc, argv, "dlD:t:r:p:c:m:L")) != -1) {
+  while ((opt = getopt(argc, argv, "dlr:p:c:m:")) != -1) {
     switch (opt) {
     case 'd':
       as_daemon = true;
