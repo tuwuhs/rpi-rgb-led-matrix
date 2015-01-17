@@ -15,6 +15,9 @@
 #include <string.h>
 #include <unistd.h>
 #include <termios.h>
+#include <sys/select.h>
+#include <sys/inotify.h>
+#include <errno.h>
 
 #include <algorithm>
 
@@ -271,17 +274,29 @@ int main(int argc, char *argv[]) {
   // Setup termios for non-blocking input
   struct termios initial_settings, new_settings;
   tcgetattr(0,&initial_settings);
- 
   new_settings = initial_settings;
   new_settings.c_lflag &= ~ICANON;
   new_settings.c_lflag &= ~ECHO;
   new_settings.c_lflag &= ~ISIG;
   new_settings.c_cc[VMIN] = 0;
   new_settings.c_cc[VTIME] = 0;
- 
   tcsetattr(0, TCSANOW, &new_settings);
   
-  // Now, the image genreation runs in the background. We can do arbitrary
+  // Setup inotify to watch for file change
+  int ifd, wd;
+  char buf[16384];
+  ifd = inotify_init();
+  if (ifd < 0) {
+    fprintf(stderr, "Cannot obtain an inotify instance");
+    return 1;
+  }
+  wd = inotify_add_watch(ifd, ".", IN_MODIFY | IN_CREATE | IN_DELETE);
+  if (wd < 0) {
+    fprintf(stderr, "Cannot add inotify watch");
+    return 1;
+  }
+  
+  // Now, the image generation runs in the background. We can do arbitrary
   // things here in parallel. In this demo, we're essentially just
   // waiting for one of the conditions to exit.
   if (as_daemon) {
@@ -294,6 +309,37 @@ int main(int argc, char *argv[]) {
       if (key != EOF) {
         break;
       }
+      
+      // select waits until inotify has 1 or more events.
+      // select syntax is beyond the scope of this sample but, don't worry, the fd+1 is correct:
+      // select needs the the highest fd (+1) as the first parameter.
+      struct timeval timeout_tv;
+      timeout_tv.tv_sec = 0;
+      timeout_tv.tv_usec = 20000;
+      fd_set watch_set;
+      FD_ZERO(&watch_set);
+      FD_SET(ifd, &watch_set); 
+      int ret = select(ifd+1, &watch_set, NULL, NULL, &timeout_tv);
+      if (ret) {
+        // Read event(s) from non-blocking inotify fd (non-blocking specified in inotify_init1 above).
+        int length = read(ifd, buf, sizeof(buf));
+        if (length <= 0) {
+          fprintf(stderr, "inotify read error");
+        }
+        int i = 0;
+        while (i < length) {
+          struct inotify_event* ev;
+          ev = (struct inotify_event*) &buf[i];
+          if (ev->len) {
+            printf("File %s %s\n", ev->name,
+                (ev->mask & IN_CREATE)? "created":
+                (ev->mask & IN_DELETE)? "deleted": "modified");
+          } else {
+            printf("Unexpected event - wd=%d mask=%d\n", ev->wd, ev->mask);
+          }
+          i += sizeof(struct inotify_event) + ev->len;
+        }
+      }
     }
   }
 
@@ -301,6 +347,7 @@ int main(int argc, char *argv[]) {
   delete image_gen;
   delete canvas;
 
+  // Return to terminal initial settings
   tcsetattr(0, TCSANOW, &initial_settings);
 
   return 0;
