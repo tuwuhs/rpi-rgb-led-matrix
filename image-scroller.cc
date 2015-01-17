@@ -255,11 +255,11 @@ int main(int argc, char *argv[]) {
 
   Canvas *canvas = matrix;
 
-  // The ThreadedCanvasManipulator objects are filling
-  // the matrix continuously.
+  // The ThreadedCanvasManipulator objects are filling the matrix continuously.
   ThreadedCanvasManipulator *image_gen = NULL;
+  ImageScroller *scroller;
   if (image_filename) {
-    ImageScroller *scroller = new ImageScroller(canvas, 1, scroll_ms);
+    scroller = new ImageScroller(canvas, 1, scroll_ms);
     if (!scroller->LoadPPM(image_filename))
       return 1;
     image_gen = scroller;
@@ -334,6 +334,9 @@ int main(int argc, char *argv[]) {
             printf("File %s %s\n", ev->name,
                 (ev->mask & IN_CREATE)? "created":
                 (ev->mask & IN_DELETE)? "deleted": "modified");
+            if (strcmp(ev->name, image_filename) == 0) {
+              scroller->LoadPPM(image_filename);
+            }
           } else {
             printf("Unexpected event - wd=%d mask=%d\n", ev->wd, ev->mask);
           }
