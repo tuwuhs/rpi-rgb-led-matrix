@@ -300,7 +300,40 @@ int main(int argc, char *argv[]) {
   // things here in parallel. In this demo, we're essentially just
   // waiting for one of the conditions to exit.
   if (as_daemon) {
-    sleep(INT_MAX);
+    while (1) {
+      // select waits until inotify has 1 or more events.
+      // select syntax is beyond the scope of this sample but, don't worry, the fd+1 is correct:
+      // select needs the the highest fd (+1) as the first parameter.
+      struct timeval timeout_tv;
+      timeout_tv.tv_sec = 0;
+      timeout_tv.tv_usec = 20000;
+      fd_set watch_set;
+      FD_ZERO(&watch_set);
+      FD_SET(ifd, &watch_set); 
+      int ret = select(ifd+1, &watch_set, NULL, NULL, &timeout_tv);
+      if (ret) {
+        // Read event(s) from non-blocking inotify fd (non-blocking specified in inotify_init1 above).
+        int length = read(ifd, buf, sizeof(buf));
+        if (length <= 0) {
+          fprintf(stderr, "inotify read error");
+        }
+        int i = 0;
+        while (i < length) {
+          struct inotify_event* ev;
+          ev = (struct inotify_event*) &buf[i];
+          if (ev->len) {
+            printf("File %s changed.\n", ev->name);
+            if (strcmp(ev->name, image_filename) == 0) {
+              // usleep(1000000);
+              scroller->LoadPPM(image_filename);
+            }
+          } else {
+            printf("Unexpected event - wd=%d mask=%d\n", ev->wd, ev->mask);
+          }
+          i += sizeof(struct inotify_event) + ev->len;
+        }
+      }
+    }
   } else {
     // Things are set up. Just wait for <RETURN> to be pressed.
     printf("Press <RETURN> to exit and reset LEDs\n");
